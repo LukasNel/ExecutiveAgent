@@ -353,7 +353,7 @@ class TableCreator(Tool):
 INITIAL = f"""Allows you to perform SQL queries on the following tables.
 Feel free to join tables together in your queries.
 Beware that this tool's output is a pandas Dataframe of the execution output. (Note: Current time is {datetime.now(UTC)} (UTC))
-
+You can also use this tool to update tables or insert data into them(the database is the same as the TableCreator tool)
 Please try to join tables.
 """
 class SQLAgent(Tool):
