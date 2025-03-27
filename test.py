@@ -18,7 +18,10 @@ If it is not, schedule the task and return the task details.
 query = SYSTEM_PROMPT +"\n\n" + f"Message: \n hi, I'm meeting someone tomorrow at 3pm, could you please remind me? Today is {current_time}"
 data = {
     "query": query,
-    "phone_number": "+12035083967"
+    "metadata": {
+        "email": "x@x.com",
+        "phone_number": "+12035083967"
+    }
 }
 # Prepare the request data
 print(data)

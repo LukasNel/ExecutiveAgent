@@ -777,7 +777,10 @@ if __name__ == "__main__":
     query = SYSTEM_PROMPT +"\n\n" + f"Message: \n hi, I'm meeting someone tomorrow at 3pm, could you please remind me? Today is {current_time}"
     data = {
         "query": query,
-        "phone_number": "+12035083967"
+        "metadata": {
+            "email": "x@x.com",
+            "phone_number": "+12035083967"
+        }
     }
     for step in agent.run(query):
         print(step)
