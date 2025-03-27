@@ -15,6 +15,7 @@ from enum import Enum
 from typing import Literal
 from typing import cast, Generator
 from smolagents import ActionStep, AgentType
+import os
 
 
 def pydantic_to_schema(
@@ -804,6 +805,8 @@ class ExecutiveAgent:
 
 
 if __name__ == "__main__":
+    api_key = input("Enter your API key: ")
+    os.environ["ANTHROPIC_API_KEY"] = api_key
     agent = ExecutiveAgent(db_path="tasks.db")
     # Create the query with current datetime
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
