@@ -12,7 +12,7 @@ from typing import Any
 
 class QueryRequestT(BaseModel):
     query: str
-    phone_number: str
+    metadata: dict
     
 
 class CustomEncoder(json.JSONEncoder):
@@ -50,7 +50,7 @@ class AgentAPI:
         """Initialize the webhook URL from Modal secrets."""
         self.webhook_url = os.getenv("ZAPIER_WEBHOOK_URL")
     
-    def send_to_zapier(self, query: str, phone_number: str, response: dict) -> bool:
+    def send_to_zapier(self, query: str, metadata: dict, response: dict) -> bool:
         """
         Send the query and response to Zapier webhook.
         
@@ -68,7 +68,7 @@ class AgentAPI:
             "query": query,
             "response": response,
             "timestamp": datetime.now(UTC).isoformat(),
-            "phone_number": phone_number
+            "metadata": metadata
         }
         
         response = requests.post(
@@ -82,7 +82,7 @@ class AgentAPI:
     @modal.fastapi_endpoint(method="POST", docs=True,)
     def query(self, data: QueryRequestT) -> Dict[str, Any]:
         query = data.query
-        phone_number = data.phone_number
+        metadata = data.metadata
         agent = ExecutiveAgent(enable_extended_thinking=True, db_path=os.path.join(VOLUME_DIR, "tasks.db"))
         """
         Process a query using the ExecutiveAgent.
@@ -113,7 +113,7 @@ class AgentAPI:
             message: dict = steps[-1]
             
             # Send to Zapier if requested
-            zapier_success = self.send_to_zapier(query, phone_number, message)
+            zapier_success = self.send_to_zapier(query, metadata, message)
             return {
                 "response": message,
                 "zapier_sent": zapier_success
