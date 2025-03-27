@@ -6,7 +6,6 @@ from pydantic import BaseModel
 import logging
 import sqlite3
 from smolagents import CodeAgent, LogLevel
-from smolagents.models import LiteLLMModel
 from smolagents import FinalAnswerTool
 from typing import Type
 from smolagents import LiteLLMModel
@@ -16,10 +15,11 @@ from enum import Enum
 from typing import Literal
 from typing import cast, Generator
 from smolagents import ActionStep, AgentType
-import os
-import json
 
-def pydantic_to_schema(model_class: Type[BaseModel], description: str = None) -> Dict[str, Any]:
+
+def pydantic_to_schema(
+    model_class: Type[BaseModel], description: str = None
+) -> Dict[str, Any]:
     """
     Convert a Pydantic model into a JSON schema format compatible with the Tool class.
 
@@ -43,10 +43,7 @@ def pydantic_to_schema(model_class: Type[BaseModel], description: str = None) ->
             field_descriptions[field_name] = field.description
 
     # Create the base schema
-    result_schema = {
-        "type": "object",
-        "properties": {}
-    }
+    result_schema = {"type": "object", "properties": {}}
 
     if description:
         result_schema["description"] = description
@@ -65,13 +62,17 @@ def pydantic_to_schema(model_class: Type[BaseModel], description: str = None) ->
     result_schema["properties"] = properties
 
     # Include required fields if any
-    required_fields = [name for name, field in model_class.model_fields.items() if field.is_required()]
+    required_fields = [
+        name for name, field in model_class.model_fields.items() if field.is_required()
+    ]
     if required_fields:
         result_schema["required"] = required_fields
     return result_schema
 
 
-def process_field(field_name: str, field, model_class, field_descriptions: Dict[str, str]) -> Dict[str, Any]:
+def process_field(
+    field_name: str, field, model_class, field_descriptions: Dict[str, str]
+) -> Dict[str, Any]:
     """
     Process a single field and convert it to the appropriate schema format.
 
@@ -112,7 +113,9 @@ def process_field(field_name: str, field, model_class, field_descriptions: Dict[
             field_schema["nullable"] = True
         else:
             # Complex Union type - use anyOf
-            field_schema["anyOf"] = [process_type(arg, {})["type"] for arg in non_none_types]
+            field_schema["anyOf"] = [
+                process_type(arg, {})["type"] for arg in non_none_types
+            ]
 
     # Handle List types
     elif origin is list:
@@ -191,11 +194,18 @@ def process_type(python_type, schema: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class CustomFinalAnswerTool(FinalAnswerTool):
-    def __init__(self, model : Type[BaseModel], description:str = "A user object", *args, **kwargs):
-        self.inputs : Dict[str, Any] = {"answer":pydantic_to_schema(model, description)}
-        self.model_pydantic : Type[BaseModel] = model
+    def __init__(
+        self,
+        model: Type[BaseModel],
+        description: str = "A user object",
+        *args,
+        **kwargs,
+    ):
+        self.inputs: Dict[str, Any] = {"answer": pydantic_to_schema(model, description)}
+        self.model_pydantic: Type[BaseModel] = model
         super().__init__(*args, **kwargs)
-    def forward(self, answer : dict) -> dict:
+
+    def forward(self, answer: dict) -> dict:
         data = self.model_pydantic.model_validate(answer)
         return data.model_dump()
 
@@ -254,7 +264,7 @@ class TableCreator(Tool):
         },
     }
     output_type = "string"
-    
+
     description = """Create a new table in the SQLite database with specified columns and data.
 
     This tool allows you to:
@@ -275,11 +285,12 @@ class TableCreator(Tool):
         columns: [["id", "INTEGER"], ["name", "TEXT"], ["salary", "REAL"]]
         data: [{"id": 1, "name": "John", "salary": 50000}]
     """
-    
+
     def connect(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
+
     def __init__(self, db_path: str = "tasks.db"):
         """Initialize TableCreator with SQLite connection."""
         self.db_path = db_path
@@ -289,33 +300,35 @@ class TableCreator(Tool):
         """Print information about all tables in the database."""
         # Get list of all tables
         conn = self.connect()
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT name FROM sqlite_master 
             WHERE type='table' 
             ORDER BY name;
-        """)
+        """
+        )
         tables = cursor.fetchall()
-        
+
         if not tables:
             print("\nNo tables found in database.")
             return
-            
+
         print("\nCurrent tables in database:")
         for table in tables:
             table_name = table[0]
             # Get row count
             count_cursor = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
             row_count = count_cursor.fetchone()[0]
-            
+
             # Get schema
             schema_cursor = conn.execute(f"PRAGMA table_info({table_name})")
             columns = schema_cursor.fetchall()
-            
+
             print(f"\nTable: {table_name} ({row_count} rows)")
             print("Columns:")
             for col in columns:
                 print(f"  - {col[1]}: {col[2]}")
-            
+
             # Print first row as sample
             sample_cursor = conn.execute(f"SELECT * FROM {table_name} LIMIT 1")
             sample = sample_cursor.fetchone()
@@ -324,18 +337,22 @@ class TableCreator(Tool):
                 print(f"  {dict(sample)}")
         conn.close()
 
-    def forward(self, table_name: str, columns: List[List[str]], data: List[Dict[str, Any]]) -> str:
+    def forward(
+        self, table_name: str, columns: List[List[str]], data: List[Dict[str, Any]]
+    ) -> str:
         """Create a new table and insert data."""
         conn = self.connect()
         try:
             # Create table
             column_defs = [f"{col[0]} {col[1]}" for col in columns]
-            create_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_defs)})"
+            create_query = (
+                f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_defs)})"
+            )
             conn.execute(create_query)
 
             # Insert data
             if data:
-                placeholders = ','.join(['?' for _ in columns])
+                placeholders = ",".join(["?" for _ in columns])
                 insert_query = f"INSERT INTO {table_name} VALUES ({placeholders})"
                 values = [[row.get(col[0]) for col in columns] for row in data]
                 conn.executemany(insert_query, values)
@@ -356,6 +373,8 @@ Beware that this tool's output is a pandas Dataframe of the execution output. (N
 You can also use this tool to update tables or insert data into them(the database is the same as the TableCreator tool)
 Please try to join tables.
 """
+
+
 class SQLAgent(Tool):
     name = "sql_engine"
     inputs = {
@@ -365,42 +384,46 @@ class SQLAgent(Tool):
         }
     }
     output_type = "object"
-    
+
     description = INITIAL
+
     def connect(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
+
     def _fetch_tables_descriptions(self) -> str:
         """Get information about all tables in the database."""
         # Get list of all tables
         conn = self.connect()
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT name FROM sqlite_master 
             WHERE type='table' 
             ORDER BY name;
-        """)
+        """
+        )
         tables = cursor.fetchall()
-        
+
         if not tables:
             return "No tables found in database."
-            
+
         description = "Current tables in database:"
         for table in tables:
             table_name = table[0]
             # Get row count
             count_cursor = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
             row_count = count_cursor.fetchone()[0]
-            
+
             # Get schema
             schema_cursor = conn.execute(f"PRAGMA table_info({table_name})")
             columns = schema_cursor.fetchall()
-            
+
             description += f"\n\nTable: {table_name} ({row_count} rows)"
             description += "\nColumns:"
             for col in columns:
                 description += f"\n  - {col[1]}: {col[2]}"
-            
+
             # Get first row as sample
             sample_cursor = conn.execute(f"SELECT * FROM {table_name} LIMIT 1")
             sample = sample_cursor.fetchone()
@@ -410,6 +433,7 @@ class SQLAgent(Tool):
         print(description)
         conn.close()
         return description
+
     def __init__(
         self,
         db_path: str = ":memory:",
@@ -427,9 +451,7 @@ class SQLAgent(Tool):
         self.db_path = db_path
         self.table_names = []
         self.description = INITIAL + self._fetch_tables_descriptions()
-        super().__init__() 
-
-    
+        super().__init__()
 
     def forward(self, query: str) -> pd.DataFrame:
         """Execute SQL query and return results as DataFrame."""
@@ -450,46 +472,49 @@ class SQLAgent(Tool):
             raise Exception(f"Error executing query: {str(e)}")
 
 
-
 class DisplayTables(Tool):
     name = "display_tables"
     inputs = {}
     output_type = "string"
     description = "Display the current tables in the database."
+
     def connect(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
+
     def _fetch_tables_descriptions(self) -> str:
         """Get information about all tables in the database."""
         # Get list of all tables
         conn = self.connect()
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT name FROM sqlite_master 
             WHERE type='table' 
             ORDER BY name;
-        """)
+        """
+        )
         tables = cursor.fetchall()
-        
+
         if not tables:
             return "No tables found in database."
-            
+
         description = "Current tables in database:"
         for table in tables:
             table_name = table[0]
             # Get row count
             count_cursor = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
             row_count = count_cursor.fetchone()[0]
-            
+
             # Get schema
             schema_cursor = conn.execute(f"PRAGMA table_info({table_name})")
             columns = schema_cursor.fetchall()
-            
+
             description += f"\n\nTable: {table_name} ({row_count} rows)"
             description += "\nColumns:"
             for col in columns:
                 description += f"\n  - {col[1]}: {col[2]}"
-            
+
             # Get first row as sample
             sample_cursor = conn.execute(f"SELECT * FROM {table_name} LIMIT 1")
             sample = sample_cursor.fetchone()
@@ -499,7 +524,7 @@ class DisplayTables(Tool):
         print(description)
         conn.close()
         return description
-    
+
     def __init__(
         self,
         db_path: str = ":memory:",
@@ -515,24 +540,26 @@ class DisplayTables(Tool):
         """
         print("Initializing DisplayTables")
         self.db_path = db_path
-        super().__init__() 
-        
-    
+        super().__init__()
+
     def forward(self) -> str:
         return self._fetch_tables_descriptions()
+
 
 class MessageTypeT(str, Enum):
     WHATSAPP = "whatsapp"
 
+
 class MessageT(BaseModel):
     message: str
     message_type: MessageTypeT
-    
+
 
 class TaskStatusT(Enum):
     PENDING = "pending"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
 
 class TaskT(BaseModel):
     id: Optional[int] = None
@@ -541,6 +568,7 @@ class TaskT(BaseModel):
     status: TaskStatusT = TaskStatusT.PENDING
     created_at: datetime = datetime.now(UTC)
     completed_at: Optional[datetime] = None
+
 
 class TaskScheduler(Tool):
     name = "task_scheduler"
@@ -551,21 +579,21 @@ class TaskScheduler(Tool):
             "properties": {
                 "description": {
                     "type": "string",
-                    "description": "Description of the task"
+                    "description": "Description of the task",
                 },
                 "scheduled_time": {
                     "type": "string",
-                    "description": "ISO format datetime string when the task should be executed"
-                }
+                    "description": "ISO format datetime string when the task should be executed",
+                },
             },
-            "required": ["description", "scheduled_time"]
+            "required": ["description", "scheduled_time"],
         }
     }
-    
-    
+
     output_type = "object"
 
-    description = """Schedule tasks for future execution.
+    description = (
+        """Schedule tasks for future execution.
     
     This tool allows you to:
     1. Create new tasks with descriptions and scheduled times
@@ -591,7 +619,10 @@ class TaskScheduler(Tool):
             "description": "Send reminder of meeting with John Doe",
             "scheduled_time": "2024-03-31T09:00:00"
         }
-    """ + datetime.now(UTC).isoformat()
+    """
+        + datetime.now(UTC).isoformat()
+    )
+
     def connect(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -606,8 +637,9 @@ class TaskScheduler(Tool):
     def _init_db(self):
         """Initialize the database schema."""
         conn = self.connect()
-        
-        conn.execute("""
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 description TEXT NOT NULL,
@@ -616,35 +648,39 @@ class TaskScheduler(Tool):
                 created_at TEXT NOT NULL,
                 completed_at TEXT
             )
-        """)
+        """
+        )
         conn.commit()
         conn.close()
+
     def forward(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """Schedule a new task."""
         try:
             conn = self.connect()
             # Parse the scheduled time
             scheduled_time = datetime.fromisoformat(task["scheduled_time"])
-            
+
             # Insert the task
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 INSERT INTO tasks (description, scheduled_time, status, created_at)
                 VALUES (?, ?, ?, ?)
-            """, (
-                task["description"],
-                scheduled_time.isoformat(),
-                TaskStatusT.PENDING.value,
-                datetime.now(UTC).isoformat()
-            ))
-            
+            """,
+                (
+                    task["description"],
+                    scheduled_time.isoformat(),
+                    TaskStatusT.PENDING.value,
+                    datetime.now(UTC).isoformat(),
+                ),
+            )
+
             conn.commit()
-            
+
             # Get the created task
             task_id = cursor.lastrowid
-            created_task = dict(conn.execute(
-                "SELECT * FROM tasks WHERE id = ?", 
-                (task_id,)
-            ).fetchone())
+            created_task = dict(
+                conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+            )
             conn.close()
             return created_task
         except Exception as e:
@@ -655,7 +691,7 @@ class TaskScheduler(Tool):
         conn = self.connect()
         cursor = conn.execute(
             "SELECT * FROM tasks WHERE status = ? ORDER BY scheduled_time",
-            (TaskStatusT.PENDING.value,)
+            (TaskStatusT.PENDING.value,),
         )
         results = [dict(row) for row in cursor.fetchall()]
         conn.close()
@@ -664,37 +700,37 @@ class TaskScheduler(Tool):
     def complete_task(self, task_id: int) -> Dict[str, Any]:
         """Mark a task as completed."""
         conn = self.connect()
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE tasks 
             SET status = ?, completed_at = ?
             WHERE id = ?
-        """, (
-            TaskStatusT.COMPLETED.value,
-            datetime.now(UTC).isoformat(),
-            task_id
-        ))
+        """,
+            (TaskStatusT.COMPLETED.value, datetime.now(UTC).isoformat(), task_id),
+        )
         conn.commit()
-        updated_task = dict(conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", 
-            (task_id,)
-        ).fetchone())
+        updated_task = dict(
+            conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        )
         conn.close()
         return updated_task
 
     def cancel_task(self, task_id: int) -> Dict[str, Any]:
         """Cancel a task."""
         conn = self.connect()
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE tasks 
             SET status = ?
             WHERE id = ?
-        """, (TaskStatusT.CANCELLED.value, task_id))
+        """,
+            (TaskStatusT.CANCELLED.value, task_id),
+        )
         conn.commit()
-        
-        updated_task = dict(conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", 
-            (task_id,)
-        ).fetchone())
+
+        updated_task = dict(
+            conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        )
         conn.close()
         return updated_task
 
@@ -702,14 +738,19 @@ class TaskScheduler(Tool):
 class ExecutiveAgent:
     """Main Executive Agent implementation integrating all tools."""
 
-    def __init__(self, data={}, enable_extended_thinking: bool = True, db_path="/alldata/tasks.db"):
+    def __init__(
+        self,
+        data={},
+        enable_extended_thinking: bool = True,
+        db_path="/alldata/tasks.db",
+    ):
         # Initialize tools
         self.table_creator = TableCreator(db_path=db_path)
         self.sql_engine = SQLAgent(db_path=db_path)
         self.task_scheduler = TaskScheduler(db_path=db_path)
         self.display_tables = DisplayTables(db_path=db_path)
         # Collect all tools
-        tools : list[Tool] = [
+        tools: list[Tool] = [
             self.table_creator,
             self.sql_engine,
             self.task_scheduler,
@@ -718,15 +759,11 @@ class ExecutiveAgent:
         ]
 
         # Initialize model - Using Claude 3.7 Sonnet with extended thinking
-        model_params = {
-        }
+        model_params = {}
         if enable_extended_thinking:
             model_params["thinking"] = {"type": "enabled", "budget_tokens": 4000}
-        model = LiteLLMModel(
-                "anthropic/claude-3-7-sonnet-20250219",
-                **model_params
-            )
-        
+        model = LiteLLMModel("anthropic/claude-3-7-sonnet-20250219", **model_params)
+
         self.agent = CodeAgent(
             tools=tools,
             model=model,
@@ -736,11 +773,12 @@ class ExecutiveAgent:
                 "numpy",
                 "pandas",
                 "math",
-                "statistics"
+                "statistics",
             ],
             verbosity_level=LogLevel.INFO,
-            step_callbacks=[]
+            step_callbacks=[],
         )
+
     def run(self, query: str):
         """
         Run the executive agent with the provided query.
@@ -753,7 +791,7 @@ class ExecutiveAgent:
         """
         for step in cast(
             Generator[ActionStep | AgentType, None, None],
-            self.agent.run(query, stream=True)
+            self.agent.run(query, stream=True),
         ):
             # For UI purposes, collect maps and charts after each step
             # maps = self.display_map.get_last_maps()
@@ -763,7 +801,8 @@ class ExecutiveAgent:
             # Yield both the step and any visualizations for the UI
             yield step
         print(self.task_scheduler.get_pending_tasks())
-            
+
+
 if __name__ == "__main__":
     agent = ExecutiveAgent(db_path="tasks.db")
     # Create the query with current datetime
@@ -774,13 +813,14 @@ if __name__ == "__main__":
     If it is, return the task details.
     If it is not, schedule the task and return the task details.
     """
-    query = SYSTEM_PROMPT +"\n\n" + f"Message: \n hi, I'm meeting someone tomorrow at 3pm, could you please remind me? Today is {current_time}"
+    query = (
+        SYSTEM_PROMPT
+        + "\n\n"
+        + f"Message: \n hi, I'm meeting someone tomorrow at 3pm, could you please remind me? Today is {current_time}"
+    )
     data = {
         "query": query,
-        "metadata": {
-            "email": "x@x.com",
-            "phone_number": "+12035083967"
-        }
+        "metadata": {"email": "x@x.com", "phone_number": "+12035083967"},
     }
     for step in agent.run(query):
         print(step)
